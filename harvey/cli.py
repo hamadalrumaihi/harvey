@@ -431,8 +431,23 @@ def cmd_outbox(args):
             print(f"\n  {'Approved.' if n else 'No pending item with that id.'}\n")
             return
         if args.reject:
-            await state.update_outbox_item(args.reject, status="rejected")
-            print("\n  Rejected.\n")
+            res = await state.reject_outbox_item(args.reject)
+            if not res["rejected"]:
+                print("\n  No pending or scheduled item with that id.\n")
+            elif res["company"]:
+                print(f"\n  Rejected. Skipping {res['company']} from now on "
+                      f"({res['cancelled']} other queued email(s) cancelled).")
+                print(f"  Changed your mind? harvey outbox --restore {args.reject}\n")
+            else:
+                print("\n  Rejected.\n")
+            return
+        if args.restore:
+            res = await state.restore_skipped_business(args.restore)
+            if res["restored"]:
+                print(f"\n  {res['company']} is back on the list. Harvey will write "
+                      "a fresh draft for your approval.\n")
+            else:
+                print("\n  Nothing to restore for that id.\n")
             return
 
         paused = await state.get_setting("sending_paused")
@@ -445,16 +460,22 @@ def cmd_outbox(args):
         print(f"\n  Outbox — {len(pending)} awaiting approval, "
               f"{len(approved)}+ approved/scheduled")
         print("  " + "=" * 60)
+        flags = await state.outbox_business_flags([i["prospect_id"] for i in pending])
         for item in pending:
+            flag = flags.get(item["prospect_id"], {})
             print(f"\n  [{item['id']}] step {item['step']} ({item['kind']}) "
                   f"→ {item['to_email']}  (send {item['send_at'][:16]})")
+            if flag.get("company"):
+                print(f"  Business: {flag['company']}")
+            if flag.get("photographer"):
+                print(f"  ⚠ Already has a photographer: {flag['photographer']}")
             print(f"  Subject: {item['subject']}")
             body_preview = (item["body"][:200] + "...") if len(item["body"]) > 200 else item["body"]
             for line in body_preview.splitlines():
                 print(f"    {line}")
         if pending:
             print("\n  Approve: harvey outbox --approve <id>   |   all: harvey outbox --approve-all")
-            print("  Reject:  harvey outbox --reject <id>\n")
+            print("  Reject:  harvey outbox --reject <id>   (skips that business for good)\n")
         else:
             print("  Nothing awaiting review.\n")
 
@@ -743,7 +764,10 @@ def main():
     sub = subparsers.add_parser("outbox", help="Review/approve queued emails")
     sub.add_argument("--approve", metavar="ID", default="", help="Approve one item")
     sub.add_argument("--approve-all", action="store_true", help="Approve all pending")
-    sub.add_argument("--reject", metavar="ID", default="", help="Reject one item")
+    sub.add_argument("--reject", metavar="ID", default="",
+                     help="Reject one item; a cold email also skips its business")
+    sub.add_argument("--restore", metavar="ID", default="",
+                     help="Undo the skip caused by rejecting this item")
     sub.set_defaults(func=cmd_outbox)
 
     # harvey sending pause|resume|status

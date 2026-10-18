@@ -641,6 +641,10 @@ async def test_osm_maps_the_trades_it_does_know():
     assert provider._tags("Emergency plumber") == ["craft=plumber"]
     assert provider._tags("cosmetic dentist") == ["amenity=dentist"]
     assert provider._tags("B2B SaaS") == []
+    bjj = provider._tags("Brazilian jiu-jitsu academy")
+    assert "sport=jiu-jitsu" in bjj and "sport=martial_arts" in bjj
+    assert provider._tags("MMA gym") == bjj  # discipline wins over "gym"
+    assert provider._tags("Fitness gym") == ["leisure=fitness_centre"]
 
 
 @pytest.mark.asyncio

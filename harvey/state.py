@@ -413,7 +413,20 @@ MIGRATIONS: list[str] = [
     -- so one subscription's budget never consumes the other's.
     ALTER TABLE usage_log ADD COLUMN codex_calls INTEGER DEFAULT 0;
     """,
+    # ── v12: a business the user said no to stays a no ──
+    """
+    -- Set when the user rejects a cold email in the Outbox. The whole
+    -- business is skipped, not just that one draft: its queued follow-ups
+    -- are cancelled and anyone found there later is never written to.
+    ALTER TABLE companies ADD COLUMN skipped_at TIMESTAMP;
+    ALTER TABLE companies ADD COLUMN skip_reason TEXT DEFAULT '';
+    """,
 ]
+
+# Prospects at a skipped business. Only people Harvey hasn't heard back from
+# are moved: someone who replied or booked keeps their status.
+SKIPPED_STATUS = "skipped"
+_SKIPPABLE_STATUSES = ("new", "queued", "contacted")
 
 BRAIN_PROVIDERS = ("claude", "codex")
 _USAGE_LOG_COLUMN = {"claude": "claude_calls", "codex": "codex_calls"}
@@ -656,6 +669,14 @@ class StateManager:
         prospect.email = _norm(prospect.email)
         prospect.linkedin_url = (prospect.linkedin_url or "").strip()
         async with self._connect() as db:
+            if prospect.company_id:
+                async with db.execute(
+                    "SELECT skipped_at FROM companies WHERE id = ?",
+                    (prospect.company_id,),
+                ) as cur:
+                    row = await cur.fetchone()
+                if row and row[0]:
+                    prospect.status = SKIPPED_STATUS
             cursor = await db.execute(
                 """INSERT OR IGNORE INTO prospects
                    (id, company_id, first_name, last_name, email, email_verified,
@@ -931,6 +952,129 @@ class StateManager:
             )
             await db.commit()
             return cursor.rowcount
+
+    async def reject_outbox_item(
+        self, item_id: str, reason: str = "rejected in the Outbox"
+    ) -> dict:
+        """Reject one outbox item. Rejecting a cold email skips the business.
+
+        The user's "no" is about the gym, not the wording of one draft: the
+        rest of its sequence is cancelled, every prospect there is marked
+        skipped, and anyone found there later arrives already skipped.
+        Rejecting a reply draft only rejects that draft — the conversation
+        is the user's to continue by hand.
+        """
+        result = {"rejected": False, "company": "", "cancelled": 0}
+        item = await self.get_outbox_item(item_id)
+        if not item or item["status"] not in ("pending_review", "approved"):
+            return result
+        await self.update_outbox_item(item_id, status="rejected", error=reason)
+        result["rejected"] = True
+        if item["kind"] != "sequence":
+            return result
+
+        prospect = await self.get_prospect(item["prospect_id"])
+        if not prospect:
+            return result
+        now = _utcnow().isoformat()
+        marks = ",".join("?" * len(_SKIPPABLE_STATUSES))
+        async with self._connect() as db:
+            if prospect.company_id:
+                await db.execute(
+                    "UPDATE companies SET skipped_at = ?, skip_reason = ?, "
+                    "updated_at = ? WHERE id = ?",
+                    (now, reason, now, prospect.company_id),
+                )
+                async with db.execute(
+                    "SELECT id FROM prospects WHERE company_id = ?",
+                    (prospect.company_id,),
+                ) as cur:
+                    ids = [r[0] for r in await cur.fetchall()]
+            else:
+                ids = [prospect.id]
+            id_marks = ",".join("?" * len(ids))
+            await db.execute(
+                f"UPDATE prospects SET status = ?, updated_at = ? "
+                f"WHERE id IN ({id_marks}) AND status IN ({marks})",
+                (SKIPPED_STATUS, now, *ids, *_SKIPPABLE_STATUSES),
+            )
+            cursor = await db.execute(
+                f"UPDATE outbox SET status = 'cancelled', error = ?, updated_at = ? "
+                f"WHERE prospect_id IN ({id_marks}) AND kind = 'sequence' "
+                f"AND status IN ('pending_review', 'approved')",
+                (f"business skipped: {reason}", now, *ids),
+            )
+            result["cancelled"] = cursor.rowcount
+            await db.commit()
+        result["company"] = prospect.company or prospect.email
+        return result
+
+    async def restore_skipped_business(self, item_id: str) -> dict:
+        """Undo a skip, starting from the outbox item that caused it.
+
+        Its prospects go back to 'new', so Harvey writes them a fresh draft
+        on a later cycle — which lands in the Outbox for approval like any
+        other. Cancelled drafts stay cancelled.
+        """
+        result = {"restored": 0, "company": ""}
+        item = await self.get_outbox_item(item_id)
+        if not item:
+            return result
+        prospect = await self.get_prospect(item["prospect_id"])
+        if not prospect:
+            return result
+        now = _utcnow().isoformat()
+        async with self._connect() as db:
+            if prospect.company_id:
+                await db.execute(
+                    "UPDATE companies SET skipped_at = NULL, skip_reason = '', "
+                    "updated_at = ? WHERE id = ?",
+                    (now, prospect.company_id),
+                )
+                cursor = await db.execute(
+                    "UPDATE prospects SET status = 'new', updated_at = ? "
+                    "WHERE company_id = ? AND status = ?",
+                    (now, prospect.company_id, SKIPPED_STATUS),
+                )
+            else:
+                cursor = await db.execute(
+                    "UPDATE prospects SET status = 'new', updated_at = ? "
+                    "WHERE id = ? AND status = ?",
+                    (now, prospect.id, SKIPPED_STATUS),
+                )
+            result["restored"] = cursor.rowcount
+            await db.commit()
+        result["company"] = prospect.company or prospect.email
+        return result
+
+    async def outbox_business_flags(self, prospect_ids: list[str]) -> dict:
+        """Per prospect: the business name and, when the site credits one,
+        who already photographs them (latest HAS_PHOTOGRAPHER finding)."""
+        ids = [p for p in dict.fromkeys(prospect_ids) if p]
+        if not ids:
+            return {}
+        marks = ",".join("?" * len(ids))
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                f"""SELECT p.id, p.company,
+                       (SELECT o.value_text FROM observations o
+                         WHERE o.company_id = p.company_id
+                           AND o.signal_code = 'HAS_PHOTOGRAPHER'
+                           AND o.value_num = 1
+                           AND o.observed_at = (
+                               SELECT MAX(o2.observed_at) FROM observations o2
+                                WHERE o2.company_id = p.company_id
+                                  AND o2.signal_code = 'HAS_PHOTOGRAPHER')
+                         LIMIT 1) AS photographer
+                   FROM prospects p WHERE p.id IN ({marks})""",
+                ids,
+            ) as cursor:
+                return {
+                    r["id"]: {"company": r["company"] or "",
+                              "photographer": r["photographer"] or ""}
+                    for r in await cursor.fetchall()
+                }
 
     async def count_outbox_sent(self) -> int:
         async with self._connect() as db:
@@ -1277,6 +1421,7 @@ class StateManager:
                    FROM companies c
                    LEFT JOIN prospects p ON p.company_id = c.id
                    WHERE c.domain != ''
+                     AND c.skipped_at IS NULL
                      AND (c.prospects_checked_at IS NULL
                           OR c.prospects_checked_at < datetime('now', ?))
                    GROUP BY c.id

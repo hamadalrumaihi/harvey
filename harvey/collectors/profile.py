@@ -99,6 +99,26 @@ BOOKING_HINTS = (r"calendly\.com", r"acuityscheduling", r"schedulicity",
 AI_CRAWLERS = ("gptbot", "google-extended", "ccbot", "anthropic-ai", "claudebot",
                "perplexitybot", "bytespider")
 
+# ── Existing photographer (a business that already has someone shooting) ──
+# Credit wording, in English and the Gulf Arabic forms ("عدسة" = "lens of",
+# the usual photo credit). Each needs an explicit credit, not just the word
+# "photography", so a gym advertising its own photo day isn't flagged.
+PHOTO_CREDITS: tuple[tuple[re.Pattern, float], ...] = (
+    (re.compile(r"\b(?:photos?|photography|images?|pictures?)\s*(?:by|credits?|"
+                r"courtesy(?:\s+of)?)\s*[:\-\u2013]?\s*(@?[\w][\w.&' -]{1,40})", re.I), 0.9),
+    (re.compile(r"\U0001F4F8\s*[:\-]?\s*(@?[\w.]{2,30})"), 0.85),
+    (re.compile(r"\b((?:official|in[- ]house|resident|club|team)\s+(?:photographer|"
+                r"videographer|media\s+team|photography\s+partner|media\s+partner))\b",
+                re.I), 0.85),
+    (re.compile(r"\b((?:photography|media)\s+partner)\b", re.I), 0.8),
+    (re.compile(r"(?:\u0639\u062f\u0633\u0629|\u062a\u0635\u0648\u064a\u0631)\s*[:\uff1a]\s*(\S{2,30})"), 0.8),
+)
+# Gallery / proofing platforms photographers deliver through.
+PHOTO_PLATFORMS = ("pic-time.com", "pixieset.com", "smugmug.com", "zenfolio.com",
+                   "shootproof.com", "photoshelter.com", "sportograf.com",
+                   "pass.us", "cloudspot.io", "picflow.com")
+GALLERY_PATHS = ("/gallery", "/photos", "/media", "/galleries", "/photo-gallery")
+
 TEAM_PATHS = ("/team", "/about", "/about-us", "/our-team", "/staff",
               "/leadership", "/meet-the-team", "/company/team")
 CAREERS_PATHS = ("/careers", "/jobs", "/join-us", "/employment", "/hiring",
@@ -268,6 +288,22 @@ class ProfileCollector:
                 best = (anchor[:80], conf, href)
         return best
 
+    def detect_photographer(self, html: str) -> tuple[str, float] | None:
+        """Who already photographs this business. (evidence, confidence)."""
+        best = None
+        text = html_unescape(_text(html))
+        for pattern, conf in PHOTO_CREDITS:
+            m = pattern.search(text)
+            if m and (best is None or conf > best[1]):
+                best = (re.sub(r"\s+", " ", m.group(0)).strip()[:80], conf)
+        for href in re.findall(r'(?i)href=["\']([^"\']+)["\']', html):
+            host = (urlparse(href).netloc or "").lower().replace("www.", "")
+            platform = next((p for p in PHOTO_PLATFORMS
+                             if host == p or host.endswith("." + p)), None)
+            if platform and (best is None or 0.8 > best[1]):
+                best = (f"galleries on {platform}", 0.8)
+        return best
+
     def detect_tech(self, html: str) -> list[str]:
         found = []
         for name, patterns in TECH_FINGERPRINTS.items():
@@ -381,6 +417,19 @@ class ProfileCollector:
         agency = self.detect_agency(home, domain)
         if agency:
             add("INCUMBENT_AGENCY", text=agency[0], conf=agency[1], url=agency[2])
+
+        # Someone already shooting for them — homepage, then a gallery page
+        if self.wants("HAS_PHOTOGRAPHER"):
+            found = self.detect_photographer(home)
+            where = site
+            if not found:
+                gurl, ghtml = await self._first_present(site, GALLERY_PATHS)
+                if ghtml:
+                    found, where = self.detect_photographer(ghtml), gurl
+            if found:
+                add("HAS_PHOTOGRAPHER", num=1, text=found[0], conf=found[1], url=where)
+            else:
+                add("HAS_PHOTOGRAPHER", num=0)
 
         # robots.txt → AI crawler policy
         if self.wants("BLOCKS_AI_CRAWLERS"):

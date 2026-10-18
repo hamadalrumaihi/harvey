@@ -287,6 +287,10 @@ main { padding: 30px var(--gut) 88px; max-width: 1400px; margin: 0 auto; }
   letter-spacing: -0.025em; line-height: 1; font-variant-numeric: tabular-nums;
 }
 .stat-card .breakdown { margin-top: 11px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.desk-flag {
+  margin: 8px 0 4px; padding: 8px 10px; font-size: 13px; border-radius: 6px;
+  background: var(--s-wait-bg); color: var(--s-wait); border: 1px solid var(--s-wait-line);
+}
 .chip { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
 .chip b { color: var(--text-2); font-weight: 500; }
 

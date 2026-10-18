@@ -150,6 +150,22 @@ SIGNAL_CATALOG: list[dict] = [
         "confidence_floor": 0.0,
     },
     {
+        "code": "HAS_PHOTOGRAPHER",
+        "label": "Already has a photographer",
+        "description": (
+            "The site credits someone who already shoots for them: 'Photos by "
+            "X', an official or in-house photographer or media team, or "
+            "galleries hosted on a photo platform (Pic-Time, Pixieset, "
+            "SmugMug...). Shown as a warning on the draft so you can skip "
+            "the business — Harvey never decides that for you."
+        ),
+        "category": "profile",
+        "value_type": "bool",
+        "collector": "profile",
+        "cost_note": "free (homepage + gallery page HTML)",
+        "confidence_floor": 0.0,
+    },
+    {
         "code": "NO_SCHEMA_MARKUP",
         "label": "Missing structured data",
         "description": "No JSON-LD schema markup — a concrete, checkable SEO gap you can name in an email.",

@@ -700,9 +700,15 @@ async def get_outbox_api():
     try:
         state = _state()
         await state.init_db()
+        pending = await state.get_outbox(status="pending_review", limit=100)
+        # Which business each draft is for, and whether its site already
+        # credits a photographer — the reviewer's cue to skip it.
+        flags = await state.outbox_business_flags([i["prospect_id"] for i in pending])
+        for item in pending:
+            item.update(flags.get(item["prospect_id"], {"company": "", "photographer": ""}))
         return {
             "paused": await state.get_setting("sending_paused"),
-            "pending": await state.get_outbox(status="pending_review", limit=100),
+            "pending": pending,
             "approved": await state.get_outbox(status="approved", limit=50),
             "sent": (await query_db(
                 "SELECT * FROM outbox WHERE status = 'sent' "
@@ -739,11 +745,24 @@ async def outbox_approve(item_id: str):
 
 @app.post("/api/outbox/{item_id}/reject")
 async def outbox_reject(item_id: str):
+    """Reject a draft. For a cold email this skips the whole business."""
     try:
         state = _state()
         await state.init_db()
-        await state.update_outbox_item(item_id, status="rejected")
-        return {"success": True}
+        res = await state.reject_outbox_item(item_id)
+        return {"success": res["rejected"], **res}
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+
+
+@app.post("/api/outbox/{item_id}/restore")
+async def outbox_restore(item_id: str):
+    """Undo the skip a rejected cold email caused."""
+    try:
+        state = _state()
+        await state.init_db()
+        res = await state.restore_skipped_business(item_id)
+        return {"success": bool(res["restored"]), **res}
     except Exception as e:
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 

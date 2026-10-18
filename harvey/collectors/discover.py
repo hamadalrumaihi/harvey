@@ -496,6 +496,18 @@ class OpenStreetMap(DiscoveryProvider):
         "attorney": ['office=lawyer'],
         "contractor": ['craft=builder', 'office=construction_company'],
         "landscap": ['craft=gardener', 'shop=garden_centre'],
+        # Combat-sports academies. OSM puts the discipline on `sport=`;
+        # every spelling below is in real use.
+        **dict.fromkeys(
+            ("martial", "jiu", "bjj", "grappl", "mma", "judo", "karate",
+             "taekwondo", "muay", "kickbox", "boxing", "wrestl"),
+            ['sport=martial_arts', 'sport=jiu-jitsu', 'sport=brazilian_jiu_jitsu',
+             'sport=mma', 'sport=judo', 'sport=karate', 'sport=taekwondo',
+             'sport=muay_thai', 'sport=kickboxing', 'sport=boxing',
+             'sport=wrestling'],
+        ),
+        "gym": ['leisure=fitness_centre'],
+        "fitness": ['leisure=fitness_centre'],
     }
 
     def _tags(self, term: str) -> list[str]:
@@ -528,9 +540,9 @@ class OpenStreetMap(DiscoveryProvider):
         lat, lng, radius_km = (query.coordinate.split(",") + ["", "", ""])[:3]
         radius_m = int(float(radius_km or 25) * 1000)
         clauses = "".join(
-            f'node[{tag.split("=")[0]}={tag.split("=")[1]}](around:{radius_m},{lat},{lng});'
-            f'way[{tag.split("=")[0]}={tag.split("=")[1]}](around:{radius_m},{lat},{lng});'
-            for tag in tags
+            f'node["{key}"="{value}"](around:{radius_m},{lat},{lng});'
+            f'way["{key}"="{value}"](around:{radius_m},{lat},{lng});'
+            for key, value in (tag.split("=", 1) for tag in tags)
         )
         body = f"[out:json][timeout:40];({clauses});out center {query.limit};"
 
