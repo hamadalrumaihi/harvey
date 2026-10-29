@@ -496,6 +496,22 @@ class OpenStreetMap(DiscoveryProvider):
         "attorney": ['office=lawyer'],
         "contractor": ['craft=builder', 'office=construction_company'],
         "landscap": ['craft=gardener', 'shop=garden_centre'],
+        # Combat sports. `sport` is often multi-valued ("judo;karate") and
+        # spelled several ways, so these match by pattern (`key~regex`).
+        # Specific disciplines come before the broad "martial" catch-all.
+        "jiu": ['sport~jiu|bjj|grappling'],
+        "bjj": ['sport~jiu|bjj|grappling'],
+        "grappl": ['sport~jiu|bjj|grappling'],
+        "mma": ['sport~mma|mixed_martial_arts'],
+        "muay": ['sport~muay_thai|kickboxing'],
+        "box": ['sport~boxing'],
+        "judo": ['sport~judo'],
+        "wrestl": ['sport~wrestling'],
+        "karate": ['sport~karate'],
+        "taekwondo": ['sport~taekwondo'],
+        "martial": ['sport~martial_arts|judo|karate|taekwondo|jiu|bjj|grappling'
+                    '|mma|muay_thai|kickboxing|boxing|wrestling|aikido|kung_fu'],
+        "fitness": ['leisure=fitness_centre'],
     }
 
     def _tags(self, term: str) -> list[str]:
@@ -514,6 +530,15 @@ class OpenStreetMap(DiscoveryProvider):
                 return tags
         return []
 
+    @staticmethod
+    def _filter(tag: str) -> str:
+        """`key=value` is an exact match; `key~a|b` a case-insensitive pattern."""
+        if "~" in tag:
+            key, pattern = tag.split("~", 1)
+            return f'[{key}~"{pattern}",i]'
+        key, value = tag.split("=", 1)
+        return f'[{key}={value}]'
+
     async def fetch(self, client, env, query):
         if not query.coordinate:
             logger.warning("osm: no coordinate for %r — Overpass needs a "
@@ -528,9 +553,9 @@ class OpenStreetMap(DiscoveryProvider):
         lat, lng, radius_km = (query.coordinate.split(",") + ["", "", ""])[:3]
         radius_m = int(float(radius_km or 25) * 1000)
         clauses = "".join(
-            f'node[{tag.split("=")[0]}={tag.split("=")[1]}](around:{radius_m},{lat},{lng});'
-            f'way[{tag.split("=")[0]}={tag.split("=")[1]}](around:{radius_m},{lat},{lng});'
+            f'{kind}{self._filter(tag)}(around:{radius_m},{lat},{lng});'
             for tag in tags
+            for kind in ("node", "way")
         )
         body = f"[out:json][timeout:40];({clauses});out center {query.limit};"
 
@@ -579,7 +604,8 @@ class OpenStreetMap(DiscoveryProvider):
                 address=" ".join(x for x in (tags.get("addr:housenumber"),
                                              tags.get("addr:street")) if x),
                 location=city or query.location,
-                category=tags.get("craft") or tags.get("shop") or tags.get("office") or "",
+                category=(tags.get("craft") or tags.get("shop") or tags.get("office")
+                          or tags.get("sport") or tags.get("leisure") or ""),
                 has_website=bool(site),
                 external_id=f"osm:{el.get('type')}/{el.get('id')}",
                 source_url=f"https://www.openstreetmap.org/{el.get('type')}/{el.get('id')}",
