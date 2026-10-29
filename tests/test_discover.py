@@ -643,6 +643,48 @@ async def test_osm_maps_the_trades_it_does_know():
     assert provider._tags("B2B SaaS") == []
 
 
+def test_osm_maps_combat_sports_before_the_broad_catch_all():
+    provider = D.OpenStreetMap()
+    assert provider._tags("Brazilian Jiu-Jitsu academy") == ["sport~jiu|bjj|grappling"]
+    assert provider._tags("MMA gym") == ["sport~mma|mixed_martial_arts"]
+    assert provider._tags("Muay Thai gym") == ["sport~muay_thai|kickboxing"]
+    assert provider._tags("Boxing gym") == ["sport~boxing"]
+    assert provider._tags("Judo club") == ["sport~judo"]
+    assert provider._tags("Wrestling club") == ["sport~wrestling"]
+    assert provider._tags("Fitness club") == ["leisure=fitness_centre"]
+    assert "judo" in provider._tags("Martial arts academy")[0]
+    # Organisers have no premises to map: refuse rather than guess.
+    assert provider._tags("Combat sports tournament organiser") == []
+
+
+@pytest.mark.asyncio
+async def test_osm_pattern_tags_build_a_case_insensitive_overpass_filter():
+    sent = {}
+
+    def handler(request):
+        sent["body"] = request.content.decode()
+        return httpx.Response(200, json={"elements": [{
+            "type": "way", "id": 7,
+            "center": {"lat": 25.3, "lon": 51.5},
+            "tags": {"name": "Doha Grappling Club", "sport": "brazilian_jiu-jitsu;judo",
+                     "leisure": "sports_centre", "website": "https://dohagrappling.example"},
+        }]})
+
+    provider = D.OpenStreetMap()
+    async with _client(handler) as client:
+        out = await provider.fetch(client, {}, D.DiscoveryQuery(
+            term="BJJ academy", coordinate="25.2854,51.5310,50"))
+    assert 'node[sport~"jiu|bjj|grappling",i](around:50000,25.2854,51.5310);' in sent["body"]
+    assert 'way[sport~"jiu|bjj|grappling",i](around:50000,25.2854,51.5310);' in sent["body"]
+    assert out[0].name == "Doha Grappling Club"
+    assert out[0].category == "brazilian_jiu-jitsu;judo"
+    assert out[0].domain == "dohagrappling.example"
+
+
+def test_osm_exact_tags_still_build_an_exact_filter():
+    assert D.OpenStreetMap._filter("craft=roofer") == "[craft=roofer]"
+
+
 @pytest.mark.asyncio
 async def test_an_unmappable_term_is_reported_not_silently_skipped(
         state, config, register, monkeypatch):
