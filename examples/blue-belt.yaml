@@ -1,0 +1,115 @@
+# Harvey for Blue Belt Media — combat-sports photography and video in Qatar.
+#
+# Copy this to harvey.local.yaml (gitignored; Harvey reads it before
+# harvey.yaml) and fill in the three TODO lines:
+#
+#     cp examples/blue-belt.yaml harvey.local.yaml
+#     harvey signals --confirm free     # includes HAS_PHOTOGRAPHER
+#
+# Mode: list-builder + drafts, YOU send. No mailbox is configured, so Harvey
+# finds academies, reads their sites, flags the ones that already have a
+# photographer, and drafts outreach into the Outbox — but nothing can leave.
+# Copy the drafts you like into email / WhatsApp / Instagram yourself, or use
+# `harvey export` for the list. Rejecting a draft skips that gym for good
+# (`harvey outbox --restore <id>` undoes it).
+#
+# To let Harvey send approved emails later: connect a mailbox
+# (`harvey gmail auth`). Every email still waits for your approval.
+
+persona:
+  name: "TODO your name"
+  company: "Blue Belt Media"
+  role: "Photographer"
+  email: "TODO you@bluebeltmedia.com"
+  linkedin: ""
+  tone: "friendly, direct, from someone who trains and shoots on the mats"
+
+product:
+  name: "Blue Belt Media"
+  description: >-
+    Combat-sports photography and video in Qatar. Jiu-jitsu and grappling
+    tournament coverage for athletes and whole academies (matched from the
+    bracket, followed mat by mat), training and gym content, athlete portrait
+    sessions, and official coverage for event organisers. Every client gets a
+    private online gallery.
+  pricing: "Quoted per event day or session — see bluebeltmedia.com/services"
+  key_benefits:
+    - "Every athlete on your roster photographed at the tournament, not just the finals"
+    - "One private gallery for the whole academy, ready to share with parents and students"
+    - "Training and promotion-day content for your Instagram, without pulling a coach off the mats"
+    - "Someone who knows the sport: knows when the sweep or the submission is coming"
+  objection_responses:
+    "we already have a photographer": "Makes sense — keep them. If they ever can't make a tournament day, I'm happy to be the backup."
+    "too expensive": "Understood. Club coverage is quoted per day and split across the roster, so per athlete it's usually less than a single private session."
+    "parents take photos": "They do, and they should. The difference is someone on the mat edge for every match, so no one's child is missed while their parent is filming another mat."
+    "not interested": "No problem at all. If you host an in-house tournament or belt promotion, keep me in mind."
+  offer:
+    primary: "Club tournament coverage, quoted per event day"
+    entry: "Free coverage of one belt-promotion or open-mat session so the academy sees the work"
+    goal: "get_reply"
+    booking_method: "ask_preference"
+    booking_url: "https://www.bluebeltmedia.com/book"
+    meeting_duration: "15 minutes"
+    meeting_owner: "TODO your name"
+
+icp:
+  # Each line is one search term per city. These also select the free
+  # OpenStreetMap categories (martial arts / gyms).
+  industries:
+    - "Brazilian jiu-jitsu academy"
+    - "MMA gym"
+    - "Muay Thai and kickboxing gym"
+    - "Judo club"
+    - "Wrestling club"
+  company_size: "1-50 employees"
+  titles:
+    - "Owner"
+    - "Founder"
+    - "Head Coach"
+    - "Head Instructor"
+    - "Academy Director"
+    - "General Manager"
+    - "Marketing Manager"
+  geography:
+    - "Doha, Qatar"
+    - "Al Rayyan, Qatar"
+    - "Al Wakrah, Qatar"
+    - "Lusail, Qatar"
+  geo_coordinates:
+    "Doha, Qatar": "25.2854,51.5310,15"
+    "Al Rayyan, Qatar": "25.2919,51.4244,15"
+    "Al Wakrah, Qatar": "25.1659,51.6038,12"
+    "Lusail, Qatar": "25.4205,51.4900,10"
+  # A careers page hiring for these means they are growing their content.
+  hiring_signals:
+    - "Social media"
+    - "Content creator"
+    - "Media"
+    - "Marketing"
+
+channels:
+  email:
+    enabled: true
+    provider: "gmail"          # no Gmail credentials in .env = nothing can send
+    max_daily_sends: 10        # if you do connect a mailbox: start small
+    require_approval: true     # every email waits for you. Keep this on.
+    send_to_risky: false
+    max_bounce_rate: 0.05
+  linkedin:
+    enabled: false
+
+usage:
+  max_daily_claude_percent: 60
+  heartbeat_interval_minutes: 30
+  quiet_hours:
+    start: "22:00"
+    end: "08:00"
+    timezone: "Asia/Qatar"
+
+# Precleared only rules on UK / US / Canada / Germany / France law, not
+# Qatar's, so it is left off. Check local rules on cold B2B email yourself.
+compliance:
+  precleared:
+    enabled: false
+    sender_country: ""
+    address_source: "published"

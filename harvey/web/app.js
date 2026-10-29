@@ -1099,6 +1099,9 @@ async function loadOutbox() {
     table('Didn\'t send', data.failed, [
       ['To', r => r.to_email], ['Status', r => badge(r.status), false, true],
       ['Reason', r => r.error, true], ['Updated', r => formatDate(r.updated_at), true],
+      ['', r => r.status === 'rejected' && r.kind === 'sequence'
+        ? '<button class="btn btn-secondary btn-sm" onclick="outboxAct(\'' + r.id + '\',\'restore\')">Undo skip</button>'
+        : '', false, true],
     ]);
 }
 
@@ -1106,23 +1109,28 @@ function renderDesk(items, i) {
   const cur = items[i];
   const rail = items.map((it, n) =>
     '<div class="desk-item ' + (n === i ? 'active' : '') + '" onclick="deskGo(' + n + ')">' +
-      '<div class="to">' + escHtml(it.to_email) + '</div>' +
+      '<div class="to">' + (it.photographer ? '&#9888; ' : '') + escHtml(it.to_email) + '</div>' +
       '<div class="sub">' + escHtml(it.subject || '(no subject)') + '</div>' +
     '</div>').join('');
 
   return '<div class="desk">' +
     '<div class="desk-list">' + rail + '</div>' +
     '<div class="desk-pane">' +
-      '<div class="to-line">To <b>' + escHtml(cur.to_email) + '</b> &middot; step ' +
-        cur.step + ' (' + escHtml(cur.kind) + ') &middot; sends ' +
+      '<div class="to-line">To <b>' + escHtml(cur.to_email) + '</b>' +
+        (cur.company ? ' at <b>' + escHtml(cur.company) + '</b>' : '') +
+        ' &middot; step ' + cur.step + ' (' + escHtml(cur.kind) + ') &middot; sends ' +
         formatDate(cur.send_at) + '</div>' +
+      (cur.photographer
+        ? '<div class="desk-flag">&#9888; Already has a photographer: ' +
+            escHtml(cur.photographer) + '</div>' : '') +
       '<div class="subject">' + escHtml(cur.subject || '(no subject)') + '</div>' +
       '<div class="body">' + escHtml(cur.body) + '</div>' +
       '<div class="desk-actions">' +
         '<button class="btn btn-primary" onclick="outboxAct(\'' + cur.id + '\',\'approve\')">' +
           'Approve <kbd>A</kbd></button>' +
-        '<button class="btn btn-secondary" onclick="outboxAct(\'' + cur.id + '\',\'reject\')">' +
-          'Reject <kbd>R</kbd></button>' +
+        '<button class="btn btn-secondary" onclick="outboxAct(\'' + cur.id + '\',\'reject\')"' +
+          (cur.kind === 'sequence' ? ' title="Skips this business: its other emails are cancelled"' : '') + '>' +
+          (cur.kind === 'sequence' ? 'Skip business' : 'Reject') + ' <kbd>R</kbd></button>' +
         '<span class="muted" style="font-size:12px;margin-left:auto">' +
           (i + 1) + ' of ' + items.length + '</span>' +
       '</div>' +
@@ -1150,7 +1158,14 @@ document.addEventListener('keydown', e => {
 
 async function outboxAct(id, action) {
   const data = await api('/api/outbox/' + encodeURIComponent(id) + '/' + action, {method: 'POST'});
-  if (data && data.success) showToast(action === 'approve' ? 'Approved — will send on schedule.' : 'Rejected.', 'success');
+  if (data && data.success) {
+    let msg = 'Approved — will send on schedule.';
+    if (action === 'reject') msg = data.company
+      ? 'Skipped ' + data.company + (data.cancelled ? ' — ' + data.cancelled + ' other email(s) cancelled.' : '.')
+      : 'Rejected.';
+    if (action === 'restore') msg = (data.company || 'Business') + ' is back — a fresh draft will land here.';
+    showToast(msg, 'success');
+  }
   else showToast('Action failed.', 'error');
   loadOutbox();
 }

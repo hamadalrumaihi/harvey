@@ -32,7 +32,8 @@ MAX_SENDS_PER_CYCLE = 8
 SEND_JITTER_SECONDS = (4, 15)
 
 # Prospect pipeline statuses that mean "stop emailing this person".
-STOP_STATUSES = {"replied", "opted_out", "lost", "meeting", "closed"}
+# "skipped" = the user rejected this business in the Outbox.
+STOP_STATUSES = {"replied", "opted_out", "lost", "meeting", "closed", "skipped"}
 
 KILL_SWITCH_KEY = "sending_paused"
 BOUNCE_COUNT_KEY = "bounce_count"

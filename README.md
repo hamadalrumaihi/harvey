@@ -314,8 +314,12 @@ The dashboard's Outbox is a decisions desk: one email fills the pane, the rest w
 ```bash
 harvey outbox                 # review from the terminal
 harvey outbox --approve-all
+harvey outbox --reject <id>   # no to this business: its other emails are cancelled
+harvey outbox --restore <id>  # changed your mind
 harvey sending pause          # kill switch, stops everything mid-flight
 ```
+
+Rejecting a cold email is a no to the **business**, not just to that draft: the rest of its sequence is cancelled and Harvey never writes to anyone there again until you restore it. With the `HAS_PHOTOGRAPHER` signal confirmed, drafts for businesses whose site already credits a photographer carry a warning, so you can skip them knowingly.
 
 Before anything leaves, a **deterministic pre-send gate** — no model involved — rejects: unrendered merge tags, banned phrases, emails over the length cap, too many links, HTML bodies, non-deliverable addresses, and any mismatch between the recipient and the database record.
 

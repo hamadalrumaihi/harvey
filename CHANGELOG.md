@@ -9,6 +9,20 @@ minor versions can still change behaviour.
 
 ### Added
 
+- **Rejecting a cold email skips the business.** In the Outbox (`R`, or
+  `harvey outbox --reject <id>`) a rejected cold email now cancels the rest of
+  that business's queued sequence, marks everyone there `skipped`, and anyone
+  found there later arrives already skipped. Rejecting a drafted *reply* still
+  rejects only that draft. Undo with the dashboard's "Undo skip" button or
+  `harvey outbox --restore <id>`.
+- **`HAS_PHOTOGRAPHER` signal.** Free, from the homepage and a gallery page:
+  photo credits ("Photos by X", "📸 @handle", Arabic "عدسة:"), an official or
+  in-house photographer or media team, or galleries hosted on a photo
+  platform. Shown as a warning on the draft in the Outbox and in
+  `harvey outbox`; it never skips anything on its own.
+- **Example config for a combat-sports photographer in Qatar**
+  (`examples/blue-belt.yaml`): list-builder mode with no mailbox, every email
+  awaiting approval.
 - **Microsoft 365 mail provider.** Set `channels.email.provider: microsoft` to
   send and read through a Microsoft 365 / Outlook mailbox via Microsoft Graph,
   for domains whose mail lives in Exchange Online (which no longer accepts
