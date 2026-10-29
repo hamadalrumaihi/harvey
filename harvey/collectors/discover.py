@@ -496,17 +496,6 @@ class OpenStreetMap(DiscoveryProvider):
         "attorney": ['office=lawyer'],
         "contractor": ['craft=builder', 'office=construction_company'],
         "landscap": ['craft=gardener', 'shop=garden_centre'],
-        # Combat-sports academies. OSM puts the discipline on `sport=`;
-        # every spelling below is in real use.
-        **dict.fromkeys(
-            ("martial", "jiu", "bjj", "grappl", "mma", "judo", "karate",
-             "taekwondo", "muay", "kickbox", "boxing", "wrestl"),
-            ['sport=martial_arts', 'sport=jiu-jitsu', 'sport=brazilian_jiu_jitsu',
-             'sport=mma', 'sport=judo', 'sport=karate', 'sport=taekwondo',
-             'sport=muay_thai', 'sport=kickboxing', 'sport=boxing',
-             'sport=wrestling'],
-        ),
-        "gym": ['leisure=fitness_centre'],
         # Combat sports. `sport` is often multi-valued ("judo;karate") and
         # spelled several ways, so these match by pattern (`key~regex`).
         # Specific disciplines come before the broad "martial" catch-all.
@@ -564,9 +553,6 @@ class OpenStreetMap(DiscoveryProvider):
         lat, lng, radius_km = (query.coordinate.split(",") + ["", "", ""])[:3]
         radius_m = int(float(radius_km or 25) * 1000)
         clauses = "".join(
-            f'node["{key}"="{value}"](around:{radius_m},{lat},{lng});'
-            f'way["{key}"="{value}"](around:{radius_m},{lat},{lng});'
-            for key, value in (tag.split("=", 1) for tag in tags)
             f'{kind}{self._filter(tag)}(around:{radius_m},{lat},{lng});'
             for tag in tags
             for kind in ("node", "way")

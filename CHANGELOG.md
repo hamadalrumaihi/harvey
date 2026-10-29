@@ -20,9 +20,6 @@ minor versions can still change behaviour.
   in-house photographer or media team, or galleries hosted on a photo
   platform. Shown as a warning on the draft in the Outbox and in
   `harvey outbox`; it never skips anything on its own.
-- **OpenStreetMap discovery for combat-sports academies and gyms**
-  (`sport=martial_arts`, `jiu-jitsu`, `mma`, `judo`, `muay_thai`, ... and
-  `leisure=fitness_centre`). Overpass tag values are now quoted.
 - **Example config for a combat-sports photographer in Qatar**
   (`examples/blue-belt.yaml`): list-builder mode with no mailbox, every email
   awaiting approval.
