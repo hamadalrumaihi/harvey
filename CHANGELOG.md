@@ -46,6 +46,13 @@ minor versions can still change behaviour.
   country, address source or product description triggers a fresh check. The
   receipt id is logged with each send. Native providers only. Off by default.
 
+- **Free discovery finds combat sports gyms and fitness centres.** The
+  OpenStreetMap source now maps BJJ/grappling, MMA, Muay Thai, boxing, judo,
+  wrestling, karate, taekwondo, martial arts in general, and fitness centres.
+  Sport tags match by case-insensitive pattern, since OSM often stores several
+  sports in one tag (`judo;karate`). Organisers and other businesses with no
+  premises still get "no category" rather than a guess.
+
 ## [0.3.0] — 2026-10-13
 
 ### Added
